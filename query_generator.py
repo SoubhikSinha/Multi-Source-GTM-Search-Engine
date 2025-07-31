@@ -25,16 +25,12 @@ class QueryGenerator:
         try:
             response = openai.chat.completions.create(
                 model="gpt-4",
-                messages=[
-                    {"role": "user", "content": prompt}
-                ],
+                messages=[{"role": "user", "content": prompt}],
                 temperature=0.7
             )
-
             output = response.choices[0].message.content.strip()
             queries = eval(output)
             return queries
-
         except Exception as e:
             print("[ERROR] Failed to generate queries:", e)
             return []
