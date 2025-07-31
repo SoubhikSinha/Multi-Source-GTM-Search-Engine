@@ -1,0 +1,4 @@
+openai
+python-dotenv
+asyncio
+search_engine

@@ -1,0 +1,8 @@
+Project Running (Sequence)
+==========================
+
+1. Create environment : conda create --prefix ./venv python=3.10 -y
+
+2. Activate env : conda activate venv/
+
+3. Install dependencies : pip install -r requirements.txt
