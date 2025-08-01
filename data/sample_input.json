@@ -1,7 +1,0 @@
-{
-  "research_goal": "Find fintech companies using AI for fraud detection",
-  "company_domains": ["stripe.com", "square.com"],
-  "search_depth": "comprehensive",
-  "max_parallel_searches": 20,
-  "confidence_threshold": 0.8
-}

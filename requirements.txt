@@ -1,4 +1,9 @@
+fastapi
+uvicorn
 openai
-python-dotenv
+httpx
 asyncio
-search_engine
+pydantic
+aiohttp
+python-dotenv
+aiohttp

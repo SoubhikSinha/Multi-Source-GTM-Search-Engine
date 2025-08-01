@@ -1,1 +1,0 @@
-# OpenFunnel--Take-Home-Assessment
