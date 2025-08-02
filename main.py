@@ -1,94 +1,107 @@
-from fastapi import FastAPI # Main application instance
-from models import ResearchRequest # Data models for request and response
-from query_generator import QueryGenerator # Query generation logic
-from search_pipeline import SearchPipeline # Search pipeline for executing queries
-import uuid # For generating unique research IDs
-import time # For measuring processing time
-from fastapi.responses import StreamingResponse # For streaming responses
-import json # For JSON serialization
-import asyncio # For asynchronous operations
-from aiohttp import ClientSession # For making async HTTP requests
+from dataclasses import asdict, is_dataclass
+import time
+from fastapi import FastAPI  # import FastAPI to create the application
+from mock_sources.job_board_api import search_jobs  # import the job board search function
+from mock_sources.linkedin_api import search_linkedin  # import the LinkedIn search function
+from mock_sources.news_api import search_news  # import the news search function
+from mock_sources.web_scraper import scrape_website  # import the website scraping function
+from models import ResearchRequest  # import the request model for validation
+from query_generator import QueryGenerator  # import the query generator class
+from search_pipeline import SearchPipeline, synthesize_findings, fetch_html  # import the search pipeline and helpers
+import uuid  # import uuid for generating unique IDs\import time  # import time to measure execution duration
+from fastapi.responses import StreamingResponse  # import StreamingResponse for SSE endpoints
+import json  # import json to serialize data in event stream
+import asyncio  # import asyncio for async operations
+from aiohttp import ClientSession  # import ClientSession for HTTP requestsrom dataclasses import asdict, is_dataclass  # import helpers to safely serialize dataclasses
 
-app = FastAPI() # FastAPI application instance
-generator = QueryGenerator() # Initialize the query generator
-pipeline = SearchPipeline() # Initialize the search pipeline
+app = FastAPI()  # create a FastAPI application instance
+generator = QueryGenerator()  # instantiate the query generator
+pipeline = SearchPipeline()  # instantiate the search pipeline
 
-@app.post("/research/batch")
-async def research_batch(request: ResearchRequest):
-    start_time = time.time() # Start timer for processing time measurement
+@app.post("/research/batch")  # define POST /research/batch endpoint
+async def research_batch(request: ResearchRequest):  # handler takes a validated ResearchRequest
+    start = time.time()  # record start time in seconds
+    # 1. generate & sort queries
+    strategies = generator.generate_queries(request.research_goal)  # generate search strategies
+    strategies.sort(key=lambda s: s.relevance_score, reverse=True)  # sort by descending relevance
+    queries = [s.query_text for s in strategies]  # extract the query text from strategies
+    if not queries:  # if no queries generated
+        return {"error": "Query generation failed."}  # return an error response
 
-    strategies = generator.generate_queries(request.research_goal) # Generate search strategies based on the research goal
-    queries = [s.query_text for s in strategies] # Extract query texts from the generated strategies
-
-    if not queries:
-        return {
-            "error": "Query generation failed. Check OpenAI setup or retry with a simpler goal."
-        }
-
-    async with ClientSession() as session:
-        # Initial batch search
-        search_results = await pipeline.batch_search( # Perform batch search across all domains
-            domains=request.company_domains, # List of company domains to search
-            queries=queries, # List of queries to execute
-            session=session, # Passing the aiohttp session for async HTTP requests
-            max_parallel=request.max_parallel_searches # Maximum parallel searches allowed
+    async with ClientSession() as session:  # open an HTTP session for all requests
+        # 2 do batch search
+        results = await pipeline.batch_search(
+            domains=request.company_domains,  # list of company domains to search
+            queries=queries,  # list of generated queries
+            session=session,  # pass the HTTP session
+            max_parallel=request.max_parallel_searches  # limit on concurrent searches
         )
 
-        # Identifying low-confidence domains
-        weak_domains = [r["domain"] for r in search_results if r["confidence_score"] < request.confidence_threshold]
+        # 3 expand & re-query for weak domains
+        weak = [r["domain"] for r in results if r["confidence_score"] < request.confidence_threshold]  # domains with low confidence
+        for i, r in enumerate(results):  # iterate over results
+            if r["domain"] in weak:  # if this domain was weak
+                exp = generator.expand_queries(request.research_goal, r["domain"], ["low confidence"])  # generate expansion queries
+                if exp:  # if expansion queries exist
+                    results[i] = await pipeline.search_company(r["domain"], exp, session)  # re-run search with expanded queries
 
-        # Expanding queries for weak domains
-        expanded_queries_per_domain = []
-        for domain in weak_domains:
-            expanded = generator.expand_queries(request.research_goal, domain, ["low confidence"]) # Generating follow-up queries for weak domains
-            expanded_queries_per_domain.append((domain, expanded)) # Storing the domain and its expanded queries
-
-        # Run re-queries for domains that got expansions
-        requery_tasks = []
-        for domain, expanded_queries in expanded_queries_per_domain:
-            if expanded_queries:
-                requery_tasks.append(pipeline.search_company(domain, expanded_queries, session))  # Passing the aiohttp session for async HTTP requests
-
-        requery_results = await asyncio.gather(*requery_tasks)
-
-        # Merge results (replace old with new if found)
-        final_results = []
-        updated_domains = {r["domain"] for r in requery_results if r} # Setting of domains that were updated with new results
-        for result in search_results:
-            if result["domain"] in updated_domains:
-                replacement = next((r for r in requery_results if r["domain"] == result["domain"]), None) # Finding the replacement result
-                final_results.append(replacement or result)
-            else:
-                final_results.append(result)
-
-        processing_time = int((time.time() - start_time) * 1000) or 1 # Processing time in milliseconds, ensuring it's at least 1 ms
-        qps = (len(request.company_domains) * len(queries)) / (processing_time / 1000) # Queries per second calculation
-        metrics = pipeline.get_metrics() # Fetching search pipeline metrics
-
-        return {
-            "research_id": str(uuid.uuid4()),
-            "total_companies": len(request.company_domains),
-            "search_strategies_generated": len(queries),
-            "total_searches_executed": len(request.company_domains) * len(queries) * 2,
-            "processing_time_ms": processing_time,
-            "results": final_results,
-            "search_performance": {
-                "queries_per_second": round(qps, 2),
-                "cache_hit_rate": metrics["cache_hit_rate"],
-                "failed_requests": metrics["failed_requests"]
-            }
+    elapsed = int((time.time() - start)*1000) or 1  # calculate elapsed time in ms, fallback to 1
+    qps = len(request.company_domains) * len(queries) / (elapsed / 1000)  # calculate queries per second
+    m = pipeline.get_metrics()  # retrieve pipeline performance metrics
+    return {
+        "research_id": str(uuid.uuid4()),  # unique ID for this research run
+        "total_companies": len(request.company_domains),  # count of companies processed
+        "search_strategies_generated": len(queries),  # count of queries generated
+        "total_searches_executed": len(request.company_domains) * len(queries) * 2,  # rough estimate of searches performed
+        "processing_time_ms": elapsed,  # total time in milliseconds
+        "results": results,  # the search results
+        "search_performance": {
+            "queries_per_second": round(qps, 2),  # formatted QPS
+            "avg_latency_per_company_ms": round(elapsed / len(request.company_domains), 2),  # avg time per company
+            "cache_hit_rate": m["cache_hit_rate"],  # cache performance
+            "failed_requests": m["failed_requests"]  # number of failed requests
         }
+    }
 
-
-async def event_stream(domains, queries):
-    for domain in domains:
-        results = await pipeline.search_company(domain, queries) # Performing search for each domain
-        yield f"data: {json.dumps(results)}\n\n" # Streaming each result as a JSON object
-
-@app.post("/research/stream")
-async def stream_search(request: ResearchRequest):
-    queries = generator.generate_queries(request.research_goal) # Generate search strategies based on the research goal
+@app.post("/research/stream", response_class=StreamingResponse)  # define POST /research/stream endpoint
+async def stream_search(request: ResearchRequest):  # handler for streaming search
+    # same query-gen & sort
+    strategies = generator.generate_queries(request.research_goal)  # regenerate queries
+    strategies.sort(key=lambda s: s.relevance_score, reverse=True)  # sort by relevance
+    queries = [s.query_text for s in strategies]  # extract query text
     return StreamingResponse(
-        event_stream(request.company_domains, queries), # Streaming the search results
-        media_type="text/event-stream" # Setting the media type for server-sent events
+        event_stream(request.company_domains, queries, request.confidence_threshold),  # attach the event stream
+        media_type="text/event-stream"  # set SSE media type
     )
+
+@app.post("/research/stream-realtime", response_class=StreamingResponse)  # define POST /research/stream-realtime endpoint
+async def stream_realtime(request: ResearchRequest):  # handler for real-time streaming search
+    strategies = generator.generate_queries(request.research_goal)  # regenerate queries
+    strategies.sort(key=lambda s: s.relevance_score, reverse=True)  # sort by relevance
+    queries = [s.query_text for s in strategies]  # extract query text
+    return StreamingResponse(
+        event_stream(request.company_domains, queries, request.confidence_threshold),  # attach the event stream
+        media_type="text/event-stream"  # set SSE media type
+    )
+
+async def event_stream(domains, queries, threshold):  # helper generator for SSE
+    async with ClientSession() as session:  # open HTTP session
+        for domain in domains:  # iterate over each company domain
+            # run first-pass
+            result = await pipeline.search_company(domain, queries, session)  # initial search
+
+            # if weak, expand & re-run
+            if result["confidence_score"] < threshold:  # check confidence
+                exp = generator.expand_queries(generator.system_prompt, domain, ["low confidence"])  # generate expansions
+                if exp:  # if expansions exist
+                    result = await pipeline.search_company(domain, exp, session)  # re-run search
+
+            # serialize safely
+            def safe(o):  # helper to convert dataclasses and nested structures
+                if is_dataclass(o): return asdict(o)
+                if isinstance(o, list): return [safe(i) for i in o]
+                if isinstance(o, dict): return {k: safe(v) for k, v in o.items()}
+                return o  # return primitives unchanged
+
+            payload = safe(result)  # serialize the result
+            yield f"data: {json.dumps(payload, indent=2)}\n\n"  # send SSE-formatted data

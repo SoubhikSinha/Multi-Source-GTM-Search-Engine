@@ -7,3 +7,5 @@ pydantic
 aiohttp
 python-dotenv
 aiohttp
+beautifulsoup4
+jsonx

@@ -24,7 +24,7 @@ PROJECT RUNNING SEQUENCE
     OR may be on curl :
 
     curl -X 'POST' \
-    'http://127.0.0.1:8000/research/batch' \
+    'http://127.0.0.1:8000/research/batch' \`
     -H 'accept: application/json' \
     -H 'Content-Type: application/json' \
     -d '{
