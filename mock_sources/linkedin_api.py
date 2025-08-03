@@ -1,6 +1,7 @@
 import os                 # Provides functions for interacting with the operating system.
 import aiohttp            # Enables making asynchronous HTTP requests.
 from dotenv import load_dotenv  # Loads environment variables from a .env file.
+import asyncio            # Provides the async framework (used if you need to simulate delays elsewhere).
 
 # Load environment variables from a .env file into the OS environment
 load_dotenv()

@@ -1,53 +1,55 @@
-import asyncio  # Provides asynchronous capabilities to handle concurrent tasks
-import json  # Used to parse and manipulate JSON data
-from openai import OpenAI, AsyncOpenAI  # OpenAI SDK clients (synchronous and asynchronous)
-import os  # Used to access environment variables
-from typing import List, Dict  # Type hints for function signatures and variables
+import asyncio  # Provides async support for concurrent operations
+import json     # Used for formatting LLM output into JSON
+from openai import OpenAI, AsyncOpenAI  # OpenAI clients (Async version used here)
+import os
+from typing import List, Dict  # Generic types for annotations: List and Dict
 
-# Import mock search functions from their respective source files
-from mock_sources.news_api import search_news  # Function to perform news search
-from mock_sources.web_scraper import scrape_website  # Function to scrape content from websites
-from mock_sources.linkedin_api import search_linkedin  # Function to search LinkedIn content
+# External search modules from local mock_sources package
+from mock_sources.news_api import search_news
+from mock_sources.web_scraper import scrape_website
+from mock_sources.linkedin_api import search_linkedin
 
-# HTTP session handling and timeout settings
-from aiohttp import ClientSession, ClientTimeout  # Async HTTP client and timeout control
+# HTTP session and timeout config
+from aiohttp import ClientSession, ClientTimeout
 
-# Utility functions and in-memory cache from utils module
-from utils import CACHE, hash_key, deduplicate_evidence  # Simple cache system, hashing utility, deduplicator
+# Utility functions: cache object, query hash function, evidence deduplicator
+from utils import CACHE, hash_key, deduplicate_evidence
 
-# Constant for setting a maximum timeout for all external requests
-MAX_TIMEOUT = 10  # Maximum time in seconds before timing out HTTP requests
+# Set max timeout for HTTP calls
+MAX_TIMEOUT = 10
 
-# Instantiate OpenAI async client using environment variable
+# OpenAI client instance (async version)
 client = AsyncOpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
-# Async function to fetch search snippets using Google Custom Search Engine
+
+# -----------------------------------
+# GOOGLE CSE-powered HTML fetcher
+# -----------------------------------
 async def fetch_html(domain: str, query: str, session: ClientSession):
-    api_url = "https://www.googleapis.com/customsearch/v1"  # Endpoint for Google Custom Search
+    api_url = "https://www.googleapis.com/customsearch/v1"
     params = {
-        "key": os.getenv("GOOGLE_API_KEY"),  # API key for Google Search
-        "cx":  os.getenv("GOOGLE_CX"),  # Custom search engine ID
-        "q":   f"site:{domain} {query}",  # Compose query to restrict search to domain
-        "num": 3  # Return top 3 results
+        "key": os.getenv("GOOGLE_API_KEY"),
+        "cx":  os.getenv("GOOGLE_CX"),
+        "q":   f"site:{domain} {query}",
+        "num": 3
     }
     try:
-        # Send GET request with specified timeout
         async with session.get(api_url, params=params, timeout=ClientTimeout(total=MAX_TIMEOUT)) as resp:
-            if resp.status != 200:  # If response is not OK, raise an exception
+            if resp.status != 200:
                 raise Exception(f"Web search HTTP {resp.status}")
-            data = await resp.json()  # Parse response JSON
-            items = data.get("items", [])  # Extract items or default to empty list
-            if items:  # If there are search results
-                snippets = [item.get("snippet","") for item in items]  # Extract snippets from results
-                confidence = min(0.7 + 0.1*len(snippets), 0.95)  # Calculate confidence score
+            data = await resp.json()
+            items = data.get("items", [])
+            if items:
+                snippets = [item.get("snippet","") for item in items]
+                confidence = min(0.7 + 0.1*len(snippets), 0.95)
                 return {
                     "source": "web_search",
                     "domain": domain,
                     "query": query,
-                    "content": "; ".join(snippets),  # Join snippets into one string
-                    "confidence": round(confidence,2)  # Round confidence
+                    "content": "; ".join(snippets),
+                    "confidence": round(confidence,2)
                 }
-            else:  # If no items found
+            else:
                 return {
                     "source": "web_search",
                     "domain": domain,
@@ -55,7 +57,7 @@ async def fetch_html(domain: str, query: str, session: ClientSession):
                     "content": "No web search results found.",
                     "confidence": 0.5
                 }
-    except Exception as e:  # On any exception during the fetch
+    except Exception as e:
         return {
             "source": "web_search",
             "domain": domain,
@@ -64,9 +66,12 @@ async def fetch_html(domain: str, query: str, session: ClientSession):
             "confidence": 0.0
         }
 
-# Async function to synthesize a summary of the evidence collected from various sources
+
+# -----------------------------------
+# Summarize & synthesize findings
+# -----------------------------------
 async def synthesize_findings(evidence_list, research_goal):
-    # Build prompt with research goal and raw evidence
+    # Format the input evidence into a summarization prompt for LLM
     prompt = (
        f"Our research goal: {research_goal}\n\n"
        "Here is the collected raw evidence:\n" +
@@ -74,43 +79,48 @@ async def synthesize_findings(evidence_list, research_goal):
        "\n\nSummarize in JSON with keys: "
        '"summary","signals_found","evidence_count"'
     )
-    # Call OpenAI chat completion API with system and user messages
+    # Call OpenAI to generate structured summary
     response = await client.chat.completions.create(
         model="gpt-4",
         messages=[
           {"role": "system", "content": "You are a researcher assistant."},
           {"role": "user", "content": prompt}
         ],
-        temperature=0.0  # Low randomness for consistent results
+        temperature=0.0
     )
-    return json.loads(response.choices[0].message.content)  # Return parsed JSON result
+    return json.loads(response.choices[0].message.content)
 
-# Class that encapsulates the entire search and aggregation pipeline
+
+# -----------------------------------
+# Pipeline class: full orchestration
+# -----------------------------------
 class SearchPipeline:
     def __init__(self):
-        self.failed_requests = 0  # Tracks number of failed external requests
-        self.total_requests = 0  # Tracks number of total requests
-        self.cache_hits = 0  # Number of responses served from cache
-        self.semaphore = None  # Used to limit concurrent access during batch search
+        self.failed_requests = 0      # Count of total failed search attempts
+        self.total_requests = 0       # Count of total search calls
+        self.cache_hits = 0           # How many times cache was used
+        self.semaphore = None         # Concurrency limiter (set in batch)
 
-    # Wrapper to safely call any async search function with retry and timeout
+    # -----------------------------------
+    # Resilient wrapper for any search call
+    # -----------------------------------
     async def safe_call(self, func, domain, query, retries=2):
-        key = hash_key(domain, query)  # Generate cache key from domain and query
-        if CACHE.get(key):  # If result exists in cache
+        key = hash_key(domain, query)      # Create cache key from domain + query
+        if CACHE.get(key):                 # Check if result is cached
             self.cache_hits += 1
             return CACHE.get(key)
 
         self.total_requests += 1
-        for attempt in range(retries + 1):  # Retry loop
+        for attempt in range(retries + 1):  # Allow retries on failure
             try:
-                async with self.semaphore:  # Limit concurrency
+                async with self.semaphore:
                     result = await asyncio.wait_for(func(domain, query), timeout=MAX_TIMEOUT)
-                CACHE.set(key, result)  # Store result in cache
+                CACHE.set(key, result)     # Cache the result for reuse
                 return result
 
-            except asyncio.TimeoutError:  # Handle timeout error
+            except asyncio.TimeoutError:
                 self.failed_requests += 1
-                if attempt == retries:  # On final retry, return timeout structure
+                if attempt == retries:
                     return {
                         "source": func.__name__,
                         "domain": domain,
@@ -119,9 +129,9 @@ class SearchPipeline:
                         "confidence": 0.0
                     }
 
-            except Exception as e:  # Handle other exceptions
+            except Exception as e:
                 self.failed_requests += 1
-                if attempt == retries:  # Return exception structure
+                if attempt == retries:
                     return {
                         "source": func.__name__,
                         "domain": domain,
@@ -131,48 +141,61 @@ class SearchPipeline:
                     }
             await asyncio.sleep(0.2 * (2 ** attempt))  # Exponential backoff
 
-    # Search across multiple data sources for one company
+
+    # -----------------------------------
+    # Search all sources for a single company
+    # -----------------------------------
     async def search_company(self, domain: str, queries: List[str], session, research_goal: str) -> Dict:
-        results = []  # Store results from all sources
+        results = []  # Container for all raw search hits
 
-        for query in queries:  # Loop over each query
+        # Loop through each query and call all sources
+        for query in queries:
             query = query.strip().strip('"')  # Clean query string
-            news_task = self.safe_call(search_news, domain, query)  # News API task
-            scrape_task = self.safe_call(scrape_website, domain, query)  # Scraper task
-            linkedin_task = self.safe_call(search_linkedin, domain, query)  # LinkedIn API task
-            html_task = self.safe_call(lambda d, q: fetch_html(d, q, session), domain, query)  # Google search task
+            news_task = self.safe_call(search_news, domain, query)
+            scrape_task = self.safe_call(scrape_website, domain, query)
+            linkedin_task = self.safe_call(search_linkedin, domain, query)
+            html_task = self.safe_call(lambda d, q: fetch_html(d, q, session), domain, query)
 
-            r = await asyncio.gather(news_task, scrape_task, html_task, linkedin_task)  # Run all in parallel
-            results.extend(r)  # Collect results
+            # Run all search calls concurrently
+            r = await asyncio.gather(news_task, scrape_task, html_task, linkedin_task)
+            results.extend(r)
 
-        clean_results = [  # Remove failed results
+        # Filter out failed/exception results
+        clean_results = [
              r for r in results
              if not r.get("content", "").startswith("Exception:")
         ]
 
-        clean_results = deduplicate_evidence(clean_results)  # Deduplicate overlapping content
+        # Deduplicate similar or overlapping pieces of evidence
+        clean_results = deduplicate_evidence(clean_results)
 
+        # Calculate average confidence from all successful evidence
         confidence = (
             sum(r["confidence"] for r in clean_results) / len(clean_results)
-        ) if clean_results else 0  # Compute average confidence
+        ) if clean_results else 0
 
+        # Generate summary from all sources + return structured output
         return {
-            "domain": domain,  # Input domain
-            "confidence_score": round(confidence, 2),  # Averaged confidence
-            "evidence_sources": len(clean_results),  # Number of evidence sources
-            "findings": await synthesize_findings(clean_results, research_goal)  # Summary
+            "domain": domain,
+            "confidence_score": round(confidence, 2),
+            "evidence_sources": len(clean_results),
+            "findings": await synthesize_findings(clean_results, research_goal)
         }
 
-    # Run search pipeline for multiple companies
+    # -----------------------------------
+    # Batch search for many companies
+    # -----------------------------------
     async def batch_search(self, domains: List[str], queries: List[str], research_goal: str, session, max_parallel: int = 20) -> List[Dict]:
-        self.semaphore = asyncio.Semaphore(max_parallel)  # Limit concurrent executions
-        tasks = [self.search_company(domain, queries, session, research_goal) for domain in domains]  # Prepare tasks
-        return await asyncio.gather(*tasks)  # Run all tasks in parallel
+        self.semaphore = asyncio.Semaphore(max_parallel)  # Limit concurrency to avoid overload
+        tasks = [self.search_company(domain, queries, session, research_goal) for domain in domains]
+        return await asyncio.gather(*tasks)  # Run all tasks concurrently
 
-    # Report pipeline metrics
+    # -----------------------------------
+    # Metrics for debugging/monitoring
+    # -----------------------------------
     def get_metrics(self):
         return {
-            "failed_requests": self.failed_requests,  # Number of failures
+            "failed_requests": self.failed_requests,
             "cache_hit_rate": (round(self.cache_hits / self.total_requests, 2)
-                                if self.total_requests else 0)  # Ratio of cache hits
+                                if self.total_requests else 0)
         }

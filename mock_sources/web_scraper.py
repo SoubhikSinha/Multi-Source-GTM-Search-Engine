@@ -1,3 +1,4 @@
+import asyncio                     # Provides async support for simulated delays and concurrency.
 import aiohttp                      # Enables making asynchronous HTTP requests.
 from bs4 import BeautifulSoup       # HTML parser to extract text from pages.
 import re                           # Regular expressions for matching query in text.

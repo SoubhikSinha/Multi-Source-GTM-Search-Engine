@@ -9,6 +9,7 @@ from fastapi.responses import StreamingResponse  # Used for Server-Sent Events (
 import json                                   # For JSON serialization
 import uuid                                   # To generate unique research IDs
 import time                                   # To measure execution time
+import asyncio                                # To manage async concurrency
 
 # Set up basic logging level
 logging.basicConfig(level=logging.INFO)
