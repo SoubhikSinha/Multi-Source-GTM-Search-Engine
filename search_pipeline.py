@@ -13,22 +13,48 @@ MAX_TIMEOUT = 10  # Maximum total seconds to wait for an HTTP request
 
 client = AsyncOpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
-async def fetch_html(domain: str, query: str, session: ClientSession):  # Fetch raw HTML for a domain+query
-    url = f"https://dummysearchengine.com/search?q=site:{domain}+{query}"  # Build search URL
+
+async def fetch_html(domain: str, query: str, session: ClientSession):
+    # Use Google Custom Search to get real web‐wide snippets
+    api_url = "https://www.googleapis.com/customsearch/v1"
+    params = {
+        "key": os.getenv("GOOGLE_API_KEY"),
+        "cx":  os.getenv("GOOGLE_CX"),
+        "q":   f"site:{domain} {query}",
+        "num": 3
+    }
     try:
-        # Send GET request with a total timeout, using the shared session
-        async with session.get(url, timeout=ClientTimeout(total=MAX_TIMEOUT)) as resp:
-            # Return a standardized dict with the raw HTML text
-            return {
-                "source": "raw_html",  # Label indicating this is uncooked HTML
-                "domain": domain,  # Echo the domain
-                "query": query,  # Echo the search query
-                "content": await resp.text(),  # Read the response body as text
-                "confidence": 0.5  # Base confidence for raw HTML evidence
-            }
+        async with session.get(api_url, params=params, timeout=ClientTimeout(total=MAX_TIMEOUT)) as resp:
+            if resp.status != 200:
+                raise Exception(f"Web search HTTP {resp.status}")
+            data = await resp.json()
+            items = data.get("items", [])
+            if items:
+                snippets = [item.get("snippet","") for item in items]
+                confidence = min(0.7 + 0.1*len(snippets), 0.95)
+                return {
+                    "source": "web_search",
+                    "domain": domain,
+                    "query": query,
+                    "content": "; ".join(snippets),
+                    "confidence": round(confidence,2)
+                }
+            else:
+                return {
+                    "source": "web_search",
+                    "domain": domain,
+                    "query": query,
+                    "content": "No web search results found.",
+                    "confidence": 0.5
+                }
     except Exception as e:
-        # On error, return an error dict with the exception message
-        return {"error": str(e)}
+        return {
+            "source": "web_search",
+            "domain": domain,
+            "query": query,
+            "content": f"Exception: {e}",
+            "confidence": 0.0
+        }
 
 
 async def synthesize_findings(evidence_list, research_goal):
@@ -40,7 +66,7 @@ async def synthesize_findings(evidence_list, research_goal):
        "\n\nSummarize in JSON with keys: "
        '"summary","signals_found","evidence_count"'
     )
-    # call out to OpenAI asynchronously (or a threadpool)…
+    # call out to OpenAI asynchronously (or a threadpool)
     response = await client.chat.completions.create(
         model="gpt-4",
         messages=[
@@ -111,11 +137,22 @@ class SearchPipeline:  # Orchestrates all search functions and aggregates result
             # Wait for all five tasks to complete in parallel
             r = await asyncio.gather(news_task, scrape_task, html_task, linkedin_task)
             results.extend(r)  # Add their outputs to the results list
-        # Filter out any calls that returned errors
-        # clean_results = [r for r in results if "error" not in r]
-        clean_results = [r for r in results if r.get("confidence", 0) > 0]
+
+        # Keep anything that didn’t completely fail (i.e. not an exception record)
+        clean_results = [
+             r for r in results
+             if not r.get("content", "").startswith("Exception:")
+        ]
+
+
+        # Deduplicate overlapping evidence
+        clean_results = deduplicate_evidence(clean_results)
+
         # Compute average confidence across successes
-        confidence = (sum(r["confidence"] for r in clean_results) / len(clean_results)) if clean_results else 0
+        confidence = (
+            sum(r["confidence"] for r in clean_results) / len(clean_results)
+        ) if clean_results else 0
+
         # Return aggregated result for this company
         return {
             "domain": domain,
@@ -137,23 +174,3 @@ class SearchPipeline:  # Orchestrates all search functions and aggregates result
             "cache_hit_rate": (round(self.cache_hits / self.total_requests, 2)
                                 if self.total_requests else 0)  # Cache efficiency
         }
-
-    # async def stream_evidence(self, domains, queries):  # Yield evidence items as they arrive
-    #     import itertools  # For creating product of domains and queries
-
-    #     async with ClientSession() as session:  # Separate session for streaming
-    #         coros = []  # List of individual safe_call coroutines
-    #         # Build one coroutine per domain-query-source combination
-    #         for domain, query in itertools.product(domains, queries):
-    #             coros += [
-    #                 self.safe_call(search_news, domain, query),
-    #                 self.safe_call(scrape_website, domain, query),
-    #                 self.safe_call(search_linkedin, domain, query),
-    #             ]
-    #         # As each call completes, yield its result immediately
-    #         for future in asyncio.as_completed(coros):
-    #             try:
-    #                 result = await future  # Wait for this particular coroutine
-    #                 yield result  # Push the result out to the caller
-    #             except Exception as e:
-    #                 yield {"error": str(e)}  # On unexpected error, yield an error dict

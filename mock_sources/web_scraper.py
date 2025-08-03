@@ -1,26 +1,3 @@
-'''
-Mock implementation of a web scraper.  # Describes that this block fakes the real scraper for testing.
-It simulates network delay and random failures like a real-world scraper.
-'''
-
-# import asyncio  # Imports asyncio to simulate asynchronous network latency.
-# import random   # Imports random to simulate occasional scraping failures.
-
-# async def scrape_website(domain: str, query: str) -> dict:  # Defines an async mock function with domain and query parameters.
-#     await asyncio.sleep(random.uniform(0.1, 0.3))          # Pauses for 100–300 ms to mimic network delay.
-#     if random.random() < 0.05:                             # 5% chance to simulate a scraping failure.
-#         raise Exception("Web scraping failed")             # Raises an exception to mimic a failed scrape.
-#     return {                                               # Returns a fake successful response dictionary.
-#         "source": "company_website",                       # Labels the data source.
-#         "domain": domain,                                  # Echoes the input domain.
-#         "query": query,                                    # Echoes the input query.
-#         "content": f"Scraped content mentioning '{query}' on {domain}/about or /blog",  # Mock scraped content.
-#         "confidence": round(random.uniform(0.65, 0.9), 2)  # Random confidence between 0.65 and 0.9.
-#     }
-
-'''
-Below is the implementation of the real web scraper.
-'''
 import asyncio                     # Provides async support for simulated delays and concurrency.
 import aiohttp                      # Enables making asynchronous HTTP requests.
 from bs4 import BeautifulSoup       # HTML parser to extract text from pages.

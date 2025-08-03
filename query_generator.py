@@ -1,106 +1,116 @@
-import os  # Provides functions for reading environment variables and interacting with the OS
-import uuid  # Used to generate unique identifiers for each query strategy
-from typing import List  # Import List for type annotations of lists
-from dataclasses import dataclass  # Simplifies creation of classes used as data containers
-from openai import OpenAI  # OpenAI SDK client for making requests to the API
-from dotenv import load_dotenv  # Loads environment variables from a .env file into os.environ
+import os
+import uuid
+from dataclasses import dataclass
+from typing import List, Optional
+from openai import OpenAI
 
-# Load variables from .env so we can access OPENAI_API_KEY
+from dotenv import load_dotenv
 load_dotenv()
 
-# Initialize the OpenAI client with the API key from environment variables
+# --- Configuration ---
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
-@dataclass  # Decorator to auto-generate init, repr, and other methods
-class QueryStrategy:  # Defines a simple container for one search query and its metadata
-    id: str  # Unique identifier for this strategy instance
-    query_text: str  # The actual text of the search query
-    source: str  # Label for where this query targets (e.g., "news", "job_board")
-    relevance_score: float = 0.0  # Score (0.0–1.0) indicating how relevant the query is
+SYSTEM_PROMPT = (
+    "You are a search strategy generator for a GTM research engine. "
+    "Given a research goal, produce diverse, high-signal queries across sources "
+    "(company sites, engineering blogs, job boards, LinkedIn, news/PR, docs, forums). "
+    "Score each query 0-1 for expected relevance, and ensure coverage of different channels."
+)
 
-class QueryGenerator:  # Encapsulates logic for creating and expanding search queries
-    def __init__(self):  # Constructor runs once when QueryGenerator() is called
-        # System prompt guiding the LLM to produce 8–12 targeted queries with scores
-        self.system_prompt = (
-            "You are an expert GTM researcher. Break down the research goal into 8-12 "
-            "highly targeted search queries across job boards, blogs, LinkedIn, news, etc. "
-            "Assign a relevance score (0.0 - 1.0) to each query."
+@dataclass
+class QueryStrategy:
+    id: str
+    query_text: str
+    source: str
+    relevance_score: float
+
+class QueryGenerator:
+    def __init__(self, system_prompt: Optional[str] = None):
+        self.system_prompt = system_prompt or SYSTEM_PROMPT
+
+    def _parse_lines(self, raw: str, min_required: int = 1) -> List[QueryStrategy]:
+        """
+        Parse model output lines of the form:
+          query_text | source | relevance_score
+        Returns a list of QueryStrategy.
+        """
+        strategies: List[QueryStrategy] = []
+        for line in raw.strip().splitlines():
+            if "|" not in line:
+                continue
+            parts = [p.strip() for p in line.split("|")]
+            if len(parts) != 3:
+                continue
+            q, src, score = parts
+            try:
+                score_f = float(score)
+            except Exception:
+                continue
+            strategies.append(QueryStrategy(
+                id=str(uuid.uuid4()),
+                query_text=q,
+                source=src,
+                relevance_score=max(0.0, min(1.0, score_f)),
+            ))
+        # Fallback if parsing failed
+        if len(strategies) < min_required:
+            # Provide a minimal safe default so the pipeline can proceed
+            strategies.append(QueryStrategy(
+                id=str(uuid.uuid4()),
+                query_text="site:company.com product launch press release",
+                source="news_pr",
+                relevance_score=0.5,
+            ))
+        return strategies
+
+    def generate_queries(self, research_goal: str, n_min: int = 8, n_max: int = 12) -> List[QueryStrategy]:
+        """
+        Generate 8-12 diverse queries with relevance scores.
+        """
+        prompt = f"""
+Research Goal: "{research_goal}"
+
+Generate {n_min}-{n_max} search queries across multiple channels.
+Format each line like:
+query_text | source | relevance_score
+
+Make the set diverse (company websites, job boards, blogs, LinkedIn, news/PR, docs, forums).
+"""
+        resp = client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[
+                {"role": "system", "content": self.system_prompt},
+                {"role": "user", "content": prompt},
+            ],
+            temperature=0.2,
         )
+        raw = resp.choices[0].message.content
+        return self._parse_lines(raw, min_required=n_min)
 
-    def generate_queries(self, goal: str) -> List[QueryStrategy]:  # Creates initial queries
-        # Build the user prompt including the research goal and examples of desired output
-        prompt = f"""
-        Research Goal: "{goal}"
-
-        Generate 8-12 search queries and assign relevance scores like:
-        - Query: "hiring Kubernetes engineers" (score: 0.9)
-        - Query: "recent Kubernetes security incidents" (score: 0.85)
-
-        Output as:
-        1. Query text (score: X)
+    def expand_queries(self, research_goal: str, domain: str, weak_signals: List[str]) -> List[QueryStrategy]:
         """
-        try:
-            # Call the OpenAI chat completion endpoint with system and user messages
-            response = client.chat.completions.create(
-                model="gpt-4",  # LLM model to use for generating queries
-                messages=[
-                    {"role": "system", "content": self.system_prompt},  # System instructions
-                    {"role": "user", "content": prompt}  # The specific research goal prompt
-                ],
-                temperature=0.7  # Controls randomness: 0.7 is moderately creative
-            )
-            # Extract the raw text output from the first (and only) choice
-            raw_text = response.choices[0].message.content
-            strategies: List[QueryStrategy] = []  # Prepare an empty list to hold results
-
-            # Split the LLM output by lines and parse any line containing "score:"
-            for line in raw_text.strip().split("\n"):
-                if "score:" in line:
-                    # Separate query text from the numeric score
-                    parts = line.split("score:")
-                    # Clean up the query text by removing list numbers/dashes/spaces
-                    query = parts[0].strip("1234567890. -\t")
-                    try:
-                        # Convert the score part to a float
-                        score = float(parts[1].strip(" )"))
-                    except ValueError:
-                        score = 0.5  # Default fallback if conversion fails
-                    # Create a QueryStrategy object and add to the list
-                    strategies.append(QueryStrategy(
-                        id=str(uuid.uuid4()),  # Generate a unique ID
-                        query_text=query,
-                        source="mixed",  # Mark source as mixed for generic use
-                        relevance_score=score
-                    ))
-            return strategies  # Return the list of structured query strategies
-        except Exception as e:
-            # Log any error from the LLM call and return an empty list
-            print("LLM Error:", e)
-            return []
-
-    def expand_queries(self, goal: str, domain: str, weak_signals: List[str]) -> List[str]:  # Generates follow-up queries
-        # Combine weak signal keywords into a comma-separated string
-        weak_areas = ", ".join(weak_signals)
-        # Prompt for follow-up queries based on low-confidence areas
-        prompt = f"""
-        The original goal is: "{goal}".
-        The company domain "{domain}" has low-confidence results or sparse evidence.
-        Generate 2-3 follow-up queries targeting gaps in: {weak_areas}.
+        Dynamic query expansion: given a domain whose evidence is weak,
+        generate 3-5 follow-up queries focused on that domain and signals.
         """
-        try:
-            # Call the OpenAI chat completion endpoint to expand queries
-            response = client.chat.completions.create(
-                model="gpt-4",
-                messages=[
-                    {"role": "system", "content": "You're an expert research query generator."},
-                    {"role": "user", "content": prompt}
-                ],
-                temperature=0.7
-            )
-            # Split output lines, clean each line, and filter out empty entries
-            return [q.strip("1234567890. -") for q in 
-                    response.choices[0].message.content.strip().split("\n") if q]
-        except Exception as e:
-            # Log expansion errors and return an empty list
-            print("Expansion LLM Error:", e)
-            return []
+        weak = "; ".join([w for w in weak_signals if w]) or "No clear signals"
+        prompt = f"""
+Research Goal: "{research_goal}"
+Domain: "{domain}"
+Weak evidence/signals: {weak}
+
+Generate 3-5 follow-up queries to strengthen confidence or fill gaps.
+Focus specifically on this domain. Use varied sources (site: filters encouraged).
+Format per line:
+query_text | source | relevance_score
+"""
+        resp = client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[
+                {"role": "system", "content": self.system_prompt},
+                {"role": "user", "content": prompt},
+            ],
+            temperature=0.2,
+        )
+        raw = resp.choices[0].message.content
+        return self._parse_lines(raw, min_required=3)
