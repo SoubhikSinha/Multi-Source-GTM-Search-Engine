@@ -46,14 +46,17 @@ async def search_linkedin(domain: str, query: str) -> dict:  # Defines the async
             # Send the GET request with a total timeout of 8 seconds.
             async with session.get(api_url, params=params, timeout=8) as resp:
                 # If the response status is anything other than 200 (OK), treat as an error.
+                # if resp.status != 200:
+                #     return {
+                #         "source": "linkedin",               # Labels the data source.
+                #         "domain": domain,                   # Echoes the input domain.
+                #         "query": query,                     # Echoes the input query.
+                #         "content": f"Google CSE error: {resp.status}",  # Error message with HTTP status code.
+                #         "confidence": 0.0                   # Zero confidence due to failure.
+                #     }
                 if resp.status != 200:
-                    return {
-                        "source": "linkedin",               # Labels the data source.
-                        "domain": domain,                   # Echoes the input domain.
-                        "query": query,                     # Echoes the input query.
-                        "content": f"Google CSE error: {resp.status}",  # Error message with HTTP status code.
-                        "confidence": 0.0                   # Zero confidence due to failure.
-                    }
+                      # Turn 429 into an exception for safe_call retry/backoff
+                      raise Exception(f"LinkedIn CSE HTTP {resp.status}")
                 # Parse the response body as JSON.
                 data = await resp.json()
                 # Extract the "items" list (search results), defaulting to an empty list if missing.

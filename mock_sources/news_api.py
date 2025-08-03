@@ -27,64 +27,63 @@ import asyncio          # Provides async functionality (used if mocking or elsew
 from dotenv import load_dotenv  # Loads environment variables from a .env file.
 
 load_dotenv()  # Reads key/value pairs from a .env file and adds them to os.environ.
-NEWSAPI_KEY = os.getenv("NEWSAPI_KEY")  # Retrieves the NewsAPI API key from environment variables.
+NEWS_API_KEY = os.getenv("NEWS_API_KEY")  # Retrieves the NewsAPI API key from environment variables.
 
-NEWSAPI_URL = "https://newsapi.org/v2/everything"  # Endpoint for searching news articles.
+NEWS_API_URL = "https://newsapi.org/v2/everything"  # Endpoint for searching news articles.
 
-async def search_news(domain: str, query: str) -> dict:  # Defines the async function to fetch news articles.
-    # Build the query parameters for the NewsAPI request.
+async def search_news(domain: str, query: str) -> dict:
     params = {
-        "q": f"{domain} {query}",    # Search string combining domain and query keywords.
-        "sortBy": "relevancy",       # Sort results by relevance to the query.
-        "language": "en",            # Only return articles in English.
-        "apiKey": NEWSAPI_KEY,       # API key for authentication.
-        "pageSize": 3                # Limit the number of articles returned to 3.
+        "q": query,          # only your keywords
+        "domains": domain,   # restrict to stripe.com
+        "sortBy": "relevancy",
+        "language": "en",
+        "apiKey": NEWS_API_KEY,
+        "pageSize": 3
     }
     try:
-        # Create an asynchronous HTTP session for making requests.
         async with aiohttp.ClientSession() as session:
-            # Send the GET request with an 8-second timeout.
-            async with session.get(NEWSAPI_URL, params=params, timeout=8) as resp:
-                # If the HTTP status is not OK (200), treat as an error.
-                if resp.status != 200:
-                    return {
-                        "source": "news",                     # Labels the data source.
-                        "domain": domain,                     # Echoes the input domain.
-                        "query": query,                       # Echoes the input query.
-                        "content": f"News API error: {resp.status}",  # Error message including status code.
-                        "confidence": 0.0                     # Zero confidence due to failure.
-                    }
-                # Parse the response body as JSON.
+            async with session.get(NEWS_API_URL, params=params, timeout=8) as resp:
                 data = await resp.json()
-                # Extract the list of articles, defaulting to an empty list if none present.
+                # DEBUG: print raw JSON once to inspect
+                # print("NewsAPI response:", json.dumps(data, indent=2))
+
+                # if resp.status != 200:
+                #     return {
+                #         "source": "news",
+                #         "domain": domain,
+                #         "query": query,
+                #         "content": f"News API error: {resp.status}",
+                #         "confidence": 0.0
+                #     }
+                if resp.status != 200:
+                    # Let safe_call retry on rate‐limit or other failures
+                    raise Exception(f"News API HTTP {resp.status}")
+
                 articles = data.get("articles", [])
                 if articles:
-                    # Collect the title from each returned article.
-                    headlines = [article["title"] for article in articles]
-                    # Compute a naive confidence score: base 0.7 + 0.1 per article, capped at 0.95.
+                    headlines = [a["title"] for a in articles]
                     confidence = min(0.7 + 0.1 * len(headlines), 0.95)
                     return {
-                        "source": "news",                     # Labels the data source.
-                        "domain": domain,                     # Echoes the input domain.
-                        "query": query,                       # Echoes the input query.
-                        "content": "; ".join(headlines),      # Join all headlines into a single string.
-                        "confidence": round(confidence, 2)    # Rounded confidence score.
+                        "source": "news",
+                        "domain": domain,
+                        "query": query,
+                        "content": "; ".join(headlines),
+                        "confidence": round(confidence, 2)
                     }
                 else:
-                    # No articles were found matching the query.
                     return {
-                        "source": "news",                     # Labels the data source.
-                        "domain": domain,                     # Echoes the input domain.
-                        "query": query,                       # Echoes the input query.
-                        "content": "No news results found.",  # Indicates absence of results.
-                        "confidence": 0.5                     # Medium confidence in “no results” outcome.
+                        "source": "news",
+                        "domain": domain,
+                        "query": query,
+                        "content": "No news results found.",
+                        "confidence": 0.5
                     }
     except Exception as e:
-        # Catch any exception (network error, JSON parsing error, etc.) and return a structured error response.
         return {
-            "source": "news",                         # Labels the data source.
-            "domain": domain,                         # Echoes the input domain.
-            "query": query,                           # Echoes the input query.
-            "content": f"Exception: {str(e)}",        # Includes the exception message.
-            "confidence": 0.0                         # Zero confidence due to the exception.
+            "source": "news",
+            "domain": domain,
+            "query": query,
+            "content": f"Exception: {e}",
+            "confidence": 0.0
         }
+
