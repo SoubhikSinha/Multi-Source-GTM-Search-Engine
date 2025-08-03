@@ -1,15 +1,21 @@
 from pydantic import BaseModel  # Base class for data validation and settings management
 from typing import List, Dict, Optional, Literal  # Generic types for static type hints
 
-class ResearchRequest(BaseModel):  # Defines the expected shape of research request payloads
-    research_goal: str  # Brief description of what the research aims to achieve
-    company_domains: List[str]  # List of company website domains to include in the research
-    search_depth: Literal["quick", "standard", "comprehensive"]  # Level of thoroughness for searches
-    max_parallel_searches: int = 10  # Max number of simultaneous API calls allowed (default 10)
-    confidence_threshold: float = 0.8  # Minimum confidence score required to accept a result (default 0.8)
+# -------------------------------
+# Input schema for POST requests
+# -------------------------------
+class ResearchRequest(BaseModel):  # Defines the expected shape of a /research request payload
+    research_goal: str  # A natural language goal (e.g., "Find fintech companies using AI for fraud detection")
+    company_domains: List[str]  # List of domains to research (e.g., ["stripe.com", "square.com"])
+    search_depth: Literal["quick", "standard", "comprehensive"]  # How deep to search (affects query count & parallelism)
+    max_parallel_searches: int = 10  # Controls concurrency of async pipeline (default = 10)
+    confidence_threshold: float = 0.8  # Only include results with this minimum confidence (default = 0.8)
 
-class SearchResult(BaseModel):  # Defines the structure of an individual company search output
-    domain: str  # The company domain that this result pertains to
-    confidence_score: float  # Numeric score representing how reliable the result is
-    evidence_sources: int  # Count of distinct sources backing up the findings
-    findings: Dict  # Raw data or summarized insights returned by the various search modules
+# -------------------------------
+# Output schema for each domain
+# -------------------------------
+class SearchResult(BaseModel):  # Represents the final output structure for a single company/domain
+    domain: str  # The specific company domain (e.g., "stripe.com")
+    confidence_score: float  # How confident the system is in the findings (0.0 to 1.0)
+    evidence_sources: int  # Number of independent signals or data sources backing the findings
+    findings: Dict  # Core insights returned by the system (usually includes fields like "technologies", "signals_found", etc.)

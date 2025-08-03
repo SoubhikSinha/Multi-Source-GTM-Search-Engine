@@ -1,41 +1,55 @@
 from functools import lru_cache  # Import lru_cache decorator for potential function memoization
 import hashlib  # Import hashlib for hashing utilities
 
-def hash_key(domain: str, query: str) -> str:  # Generate a unique hash key for a domain-query pair
-    # Encode "domain:query" and compute its MD5 hash, then return as hex string
+# -----------------------------------------------
+# Utility: Generate a unique hash key for caching
+# -----------------------------------------------
+def hash_key(domain: str, query: str) -> str:
+    # Combine domain and query into a single string and encode it
+    # Use MD5 hashing to produce a fixed-length unique hex string
     return hashlib.md5(f"{domain}:{query}".encode()).hexdigest()
 
-class SimpleCache:  # Simple in-memory cache using a Python dict
-    def __init__(self):  # Constructor initializes the internal cache store
-        self._cache = {}  # Private dict to hold cached items
+# ----------------------------------------------------
+# In-memory cache class for storing query results
+# ----------------------------------------------------
+class SimpleCache:
+    def __init__(self):
+        self._cache = {}  # Dictionary to store cached values
 
-    def get(self, key: str):  # Retrieve a value from the cache by key
-        return self._cache.get(key)  # Returns the value or None if not found
+    def get(self, key: str):
+        # Retrieve the value from cache, or None if key is not found
+        return self._cache.get(key)
 
-    def set(self, key: str, value: dict):  # Store a value in the cache under the given key
-        self._cache[key] = value  # Overwrites any existing entry for the key
+    def set(self, key: str, value: dict):
+        # Store or overwrite a value in the cache for the given key
+        self._cache[key] = value
 
-    def hit_rate(self, total: int) -> float:  # Calculate cache efficiency as hits/total requests
-        if total == 0:  # Avoid division by zero when no requests have been made
-            return 0.0  # No requests implies no hits
-        # Number of cached entries divided by total requests, rounded to two decimals
-        return round((len(self._cache) / total), 2)
+    def hit_rate(self, total: int) -> float:
+        # Return the cache hit rate: (hits / total requests)
+        if total == 0:
+            return 0.0  # Avoid division by zero
+        return round((len(self._cache) / total), 2)  # Rounded to 2 decimal places
 
-def deduplicate_evidence(evidence_list):  # Remove duplicate evidence items based on content
-    seen = set()  # Track hashes of content strings we've already encountered
-    deduped = []  # List to accumulate unique evidence items
-    for item in evidence_list:  # Iterate through each evidence dict in the input list
-        # Compute a built-in hash of the content string for quick comparison
-        content_hash = hash(item["content"])
-        if content_hash not in seen:  # If we've not seen this content before
-            seen.add(content_hash)  # Mark this content as seen
-            deduped.append(item)  # Add the unique item to the deduplicated list
-    return deduped  # Return the list without duplicates
+# ----------------------------------------------------
+# Deduplicate evidence based on hash of content field
+# ----------------------------------------------------
+def deduplicate_evidence(evidence_list):
+    seen = set()  # Track seen content hashes
+    deduped = []  # List to store unique items
+    for item in evidence_list:
+        content_hash = hash(item["content"])  # Create hash from content string
+        if content_hash not in seen:  # If this content is new
+            seen.add(content_hash)  # Mark it as seen
+            deduped.append(item)  # Add to result list
+    return deduped  # Return the deduplicated list
 
-CACHE = SimpleCache()  # Global cache instance for storing and retrieving search results
+# Global instance of the SimpleCache used across modules
+CACHE = SimpleCache()
 
-# --- Async cached_search wrapper ---
-async def cached_search(domain, query, semaphore, session, search_fn):  # Cached async search helper
+# ------------------------------------------------------------------------
+# Async helper to perform a cached search with concurrency control
+# ------------------------------------------------------------------------
+async def cached_search(domain, query, semaphore, session, search_fn):
     """
     Generic wrapper to perform a search with caching, concurrency control, and storage.
 
@@ -44,19 +58,17 @@ async def cached_search(domain, query, semaphore, session, search_fn):  # Cached
         query (str): The search query string.
         semaphore (asyncio.Semaphore): Limits concurrent calls.
         session (aiohttp.ClientSession): HTTP session for requests.
-        search_fn (callable): Function to call for performing the actual search, signature fn(domain, query, semaphore, session).
+        search_fn (callable): Function to call for performing the actual search.
 
     Returns:
         dict: The search result, either from cache or freshly fetched.
     """
-    key = hash_key(domain, query)  # Create a cache key from domain and query
-    cached = CACHE.get(key)  # Check if a cached result already exists
-    if cached:  # If we have a cached result
-        return cached  # Return it immediately without making a network call
+    key = hash_key(domain, query)  # Generate unique key for the query
+    cached = CACHE.get(key)  # Check if the result is already cached
+    if cached:
+        return cached  # Return cached result if available
 
-    # Acquire semaphore slot to limit concurrency
-    async with semaphore:
-        # Perform the actual search function and await its result
-        result = await search_fn(domain, query, semaphore, session)
-        CACHE.set(key, result)  # Store the fresh result in the cache
-        return result  # Return the newly fetched result
+    async with semaphore:  # Limit number of concurrent requests
+        result = await search_fn(domain, query, semaphore, session)  # Perform actual search
+        CACHE.set(key, result)  # Cache the result for future reuse
+        return result  # Return the fresh result

@@ -1,63 +1,78 @@
 import os                 # Provides functions for interacting with the operating system.
 import aiohttp            # Enables making asynchronous HTTP requests.
 from dotenv import load_dotenv  # Loads environment variables from a .env file.
-import asyncio            # Provides the async framework (used if you need to simulate delays elsewhere).
 
-load_dotenv()  # Reads key/value pairs from a .env file into environment variables.
-GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY")  # Retrieves the Google API key for authentication.
-GOOGLE_CX = os.getenv("GOOGLE_CX")            # Retrieves the Custom Search Engine ID.
+# Load environment variables from a .env file into the OS environment
+load_dotenv()
 
-async def search_linkedin(domain: str, query: str) -> dict:  # Defines the async function to fetch LinkedIn-related results.
-    # Construct the Google Custom Search API URL.
+# Retrieve Google API credentials from environment variables
+GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY")  # Google API key for making authenticated requests
+GOOGLE_CX = os.getenv("GOOGLE_CX")            # Google Custom Search Engine ID (CSE context)
+
+# Define an async function to search for LinkedIn company page content using Google Custom Search
+async def search_linkedin(domain: str, query: str) -> dict:
+    # Google Custom Search endpoint
     api_url = "https://www.googleapis.com/customsearch/v1"
 
-    # Derive the LinkedIn company slug (strip off .com, etc.)
-    company_slug = domain.split(".")[0]
+    # Extract a simplified version of the domain to form the LinkedIn company slug
+    company_slug = domain.split(".")[0]  # Example: 'stripe.com' becomes 'stripe'
+
+    # Parameters for the GET request to Google CSE
     params = {
-        "key": GOOGLE_API_KEY,
-        "cx": GOOGLE_CX,
-        "q": f"site:linkedin.com/company/{company_slug} {query}",
-        "num": 3
+        "key": GOOGLE_API_KEY,                          # Auth key
+        "cx": GOOGLE_CX,                                # Custom search engine context
+        "q": f"site:linkedin.com/company/{company_slug} {query}",  # Build search query targeting LinkedIn company pages
+        "num": 3                                         # Limit results to top 3
     }
+
     try:
-        # Create an asynchronous HTTP session for making requests.
+        # Create an aiohttp client session for async HTTP requests
         async with aiohttp.ClientSession() as session:
-            # Send the GET request with a total timeout of 8 seconds.
+            # Send GET request to Google CSE API with a timeout of 8 seconds
             async with session.get(api_url, params=params, timeout=8) as resp:
+                # If response status is not 200 (OK), raise exception
                 if resp.status != 200:
-                      # Turn 429 into an exception for safe_call retry/backoff
-                      raise Exception(f"LinkedIn CSE HTTP {resp.status}")
-                # Parse the response body as JSON.
+                    raise Exception(f"LinkedIn CSE HTTP {resp.status}")
+
+                # Parse JSON body of the HTTP response
                 data = await resp.json()
-                # Extract the "items" list (search results), defaulting to an empty list if missing.
+
+                # Extract the 'items' field which holds the actual search results
                 items = data.get("items", [])
+
+                # If there are search result items returned
                 if items:
-                    # Collect the snippet from each search result.
+                    # Extract snippets (short text previews) from each item
                     snippets = [item["snippet"] for item in items]
-                    # Compute a naive confidence score based on number of snippets, capped at 0.95.
+
+                    # Assign a confidence score based on number of snippets, capped at 0.95
                     confidence = min(0.7 + 0.1 * len(snippets), 0.95)
+
+                    # Return structured result dictionary
                     return {
-                        "source": "linkedin",               # Labels the data source.
-                        "domain": domain,                   # Echoes the input domain.
-                        "query": query,                     # Echoes the input query.
-                        "content": "; ".join(snippets),     # Join all snippets into one string.
-                        "confidence": round(confidence, 2)  # Rounded confidence score.
+                        "source": "linkedin",               # Data source label
+                        "domain": domain,                   # Domain being searched
+                        "query": query,                     # Search query used
+                        "content": "; ".join(snippets),     # Combine snippets into one string
+                        "confidence": round(confidence, 2)  # Confidence score rounded to 2 decimal places
                     }
+
                 else:
-                    # No items found in the search results.
+                    # No results found for this query
                     return {
-                        "source": "linkedin",               # Labels the data source.
-                        "domain": domain,                   # Echoes the input domain.
-                        "query": query,                     # Echoes the input query.
-                        "content": "No LinkedIn results found.",  # Indicates no results.
-                        "confidence": 0.5                   # Medium confidence in “no results” outcome.
+                        "source": "linkedin",                     # Data source label
+                        "domain": domain,                         # Domain being searched
+                        "query": query,                           # Search query used
+                        "content": "No LinkedIn results found.",  # Placeholder content for no results
+                        "confidence": 0.5                         # Assign a default medium confidence
                     }
+
     except Exception as e:
-        # Catch any exception (network, parsing, etc.) and return a structured error response.
+        # If any error occurs during request/response handling, return a fallback result
         return {
-            "source": "linkedin",                       # Labels the data source.
-            "domain": domain,                           # Echoes the input domain.
-            "query": query,                             # Echoes the input query.
-            "content": f"Exception: {str(e)}",          # Includes the exception message.
-            "confidence": 0.0                           # Zero confidence due to the error.
+            "source": "linkedin",                      # Data source label
+            "domain": domain,                          # Domain being searched
+            "query": query,                            # Search query used
+            "content": f"Exception: {str(e)}",         # Include the exception message in the response
+            "confidence": 0.0                          # Assign 0 confidence due to failure
         }
