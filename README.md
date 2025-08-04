@@ -306,10 +306,74 @@ Search results are collected as **structured evidence objects**.
 <br>
 
 ## Tech Stack
-<!-- Specify languages, frameworks, libraries, etc. -->
+A lean, modular tech stack optimized for async research, LLM integration, and rapid prototyping.
+
+ - ### **📦 Core Technologies**
+	| Layer                | Tech             | Purpose                                           |
+	|----------------------|------------------|---------------------------------------------------|
+	| Backend API          | FastAPI          | High-performance async REST & SSE endpoints       |
+	| Async Engine         | asyncio, aiohttp | Massive parallelism and non-blocking I/O          |
+	| Data Modeling        | pydantic         | Typed request/response validation                 |
+	| Environment Handling | python-dotenv    | Secure API key & config management                |
+
+- ### **🤖 LLM + Intelligence**
+	| Component                     | Tool               | Notes                                                             |
+	|-------------------------------|--------------------|-------------------------------------------------------------------|
+	| Query Generation & Expansion  | OpenAI GPT-4o (mini) | Generates diverse, context-aware search strategies                |
+	| Evidence Synthesis            | OpenAI GPT-4       | Summarizes and scores findings across domains                     |
+	| Agent-Like Orchestration      | Internal logic     | Patterned after Anthropic’s “Effective Agents” principles         |
+
+- ### **🌐 External Integrations**
+	| Source        | Method                                 |
+	|---------------|----------------------------------------|
+	| News          | NewsAPI                                |
+	| Web Search    | Google Custom Search API               |
+	| LinkedIn      | Stubbed / simulated API layer          |
+	| Company Sites | Live scraping with BeautifulSoup       |
+
+- ### **🛠️ Utilities**
+	| Tool         | Role                                      |
+	|--------------|-------------------------------------------|
+	| SimpleCache  | In-memory deduplication and caching       |
+	| uuid         | Unique trace IDs for tracking research runs |
+	| logging      | Structured pipeline monitoring            |
+
+<br>
 
 ## API Endpoints
-<!-- Document each REST/GraphQL endpoint -->
+### **POST /research/batch**
+Run full research across multiple companies with a single request.
+-   **Input:**
+    JSON body with:
+    -   research_goal _(str)_: What you’re investigating
+    -   company_domains _(list[str])_: Domains to target
+    -   search_depth _(quick | standard | comprehensive)_
+    -   max_parallel_searches _(int)_
+    -   confidence_threshold _(float)_
+        
+-   **Output:**
+    Structured results per domain with confidence scores, raw evidence, and summaries.
+----------
+
+### **POST /research/stream**
+Stream research results in real-time (Server-Sent Events).
+-   **Input:**
+    Same as /research/batch
+    
+-   **Output:**
+    SSE stream:
+    -   event: start → Research begins
+    -   data: <result> → One company’s result
+    -   event: error → If a domain fails
+    -   event: end → All done
+
+Each endpoint is powered by intelligent agent flows:
+-   Dynamic query generation
+-   Multi-source search
+-   Confidence evaluation
+-   Automatic retries for weak signals
+
+<br>
 
 ## Setup and Running Locally
 <!-- Local install, env vars, run commands -->
