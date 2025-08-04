@@ -404,6 +404,80 @@ pip install -r requirements.txt
 ```
 <br>
 
+### **5. Run the FastAPI Application**
+Launch the server using Uvicorn:
+```bash
+uvicorn main:app --reload
+```
+<br>
+
+### **6. Access the API Interface**
+Once the server is up, open your browser and go to:
+```bash
+http://127.0.0.1:8000/docs
+```
+You’ll see the interactive Swagger UI to test all endpoints.
+<br>
+
+### **7. Run a Sample Research Query**
+In the POST /research/batch endpoint, paste the following JSON to test:
+```bash
+{
+  "research_goal": "Find fintech companies using AI for fraud detection",
+  "company_domains": ["stripe.com", "square.com"],
+  "search_depth": "comprehensive",
+  "max_parallel_searches": 10,
+  "confidence_threshold": 0.8
+}
+```
+Alternatively, test it via curl:
+```bash
+curl -X 'POST' \
+  'http://127.0.0.1:8000/research/batch' \
+  -H 'accept: application/json' \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "research_goal": "Find fintech companies using AI for fraud detection",
+    "company_domains": ["stripe.com", "square.com"],
+    "search_depth": "comprehensive",
+    "max_parallel_searches": 10,
+    "confidence_threshold": 0.8
+  }'
+  ```
+  <br>
+
+### **8. Shut Down the Server**
+To stop the FastAPI server, simply use:
+```bash
+CTRL + C
+```
+
+<br>
 
 ## Limitations and Future Work
-<!-- Caveats, known issues, and planned improvements -->
+- **Limited Ground Truth Verification**
+  Confidence scores are heuristic and not backed by gold-standard datasets. Future versions could integrate third-party validation APIs or human-in-the-loop systems.
+
+- **No Persistent Storage Layer**  
+  The current system uses in-memory caching for speed but lacks persistence. Incorporating a lightweight database (e.g., SQLite, Redis, or Postgres) can enable history tracking, auditing, and version control of research sessions.
+
+- **Query Expansion is Basic**  
+  Follow-up queries for low-confidence results are generated using single-pass prompting. Future iterations could introduce recursive refinement or reinforcement signals to improve semantic coverage.
+
+- **No True Agentic Autonomy Yet**  
+  While the architecture supports modular agent design, agents currently operate in a linear pipeline. Transitioning to fully autonomous or self-routing agents would enable adaptive task planning and self-healing loops.
+
+- **Streamed Output is SSE-Only**  
+  The current streaming endpoint uses Server-Sent Events (SSE). Adding WebSocket support or integrating with message queues (e.g., Redis Pub/Sub, Kafka) would improve scalability and frontend compatibility.
+
+- **Limited Domain-Specific Tuning**  
+  The system does not use retrieval-augmented generation (RAG) or embeddings fine-tuned on vertical-specific corpora. Introducing vector stores or custom search rerankers would yield more precise insights in niche domains.
+
+- **No Role-Based Access or Usage Tracking**  
+  This is a standalone prototype. A production-grade version would require user authentication, role-based query limits, and telemetry logging for observability.
+
+- **LLM Cost and Latency Management**  
+  All queries and summaries rely on OpenAI API calls. Techniques like query batching, cost-aware agent scheduling, and fallback to open-source models could optimize performance and reduce operational costs.
+
+- **Limited UI/UX for Non-Developers**  
+  The current system exposes a Swagger UI. Future work includes building an interactive, non-technical dashboard for GTM teams with features like saved searches, signal heatmaps, and team collaboration.
