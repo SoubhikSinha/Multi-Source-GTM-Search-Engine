@@ -133,7 +133,47 @@ This is not just a tool for retrieving information — it’s a **cognitive loop
 <br>
 
 ## Architecture
-<!-- Describe overall architecture -->
+The **Multi-Source GTM Research Engine** is architected as a modular, agent-inspired async pipeline that combines LLM reasoning, multi-channel evidence gathering, and real-time synthesis. The system balances **scalability**, **modularity**, and **fault tolerance** using the following layered architecture:
+
+ - ### Key Agent Components
+	 | Agent Role             | Responsibility                                                                |
+	|------------------------|-------------------------------------------------------------------------------|
+	| QueryStrategyAgent     | Generates 8–12 diverse, high-signal queries across multiple sources           |
+	| ExecutionAgent         | Runs all queries concurrently across APIs, CSE, and scrapers with backoff logic |
+	| EvaluatorAgent         | Scores confidence, checks evidence sufficiency                                |
+	| RefinerAgent           | Iteratively refines queries for domains with poor coverage                    |
+	| SynthesisAgent         | Merges, deduplicates, and synthesizes insights from all evidence             |
+ 
+ - ### **Core Architectural Features**
+	 -   **Async First** : Built entirely on Python’s asyncio + aiohttp, with streaming support, timeouts, and semaphores for controlled parallelism.
+	-   **LLM-Driven Strategy** : GPT-4o generates queries, expands them intelligently, and synthesizes final summaries—mimicking a human research analyst.
+	-   **Tool-Agnostic Search Modules** : Each data source (News, LinkedIn, Website, Web Search) is encapsulated as a plug-and-play async module—easy to extend or replace.
+	-   **Smart Retry and Backoff** : Implements retry logic, confidence-based re-query, and exception-aware fault tolerance at every stage.
+	-   **In-Memory Caching** : Lightweight SimpleCache system prevents duplicate API calls, supports quick prototyping, and logs hit-rates.
+	-   **Streaming Support** : Built-in /research/stream endpoint provides real-time Server-Sent Events (SSE) for frontend integration or dashboards.
+ 
+ - ### **Design Principles Followed**
+	 - **Separation of Concerns**: Each module/agent has a single responsibility.
+	 -   **Agentic Design**: Loosely coupled, feedback-loop driven agents as per Anthropic’s Effective Agents principles.   
+	 -   **Fail-Soft Philosophy**: All errors gracefully degrade to structured fallback responses.   
+	 -   **Scalability First**: Supports dozens of domains and 80+ searches in parallel with dynamic throttling.
+ 
+ - ### **Example Flow (for: “Find companies using Kubernetes in production with recent security incidents”)**
+	> **Step 1**: GPT-4o generates queries like:
+	 - > site:linkedin.com kubernetes security engineer
+	 - > site:company.com/blog kubernetes deployment
+     - > devops job site:company.com
+    > **Step 2**: All queries run in parallel across:
+	 - > NewsAPI, LinkedIn, CSE, Web Scraping
+	> **Step 3**: Evidence scored, weak results flagged
+	> **Step 4**: Weak evidence → Refined queries → Retry
+	> **Step 5**: Findings synthesized via LLM (JSON output)
+
+<br>
+
+This architecture enables fast, adaptive, and scalable GTM research—ideal for intelligence gathering, sales strategy, or product scouting at enterprise scale.
+
+<br>
 
 ## Agent Design (Orchestration)
 <!-- Dive into agent‐level design and orchestration -->
