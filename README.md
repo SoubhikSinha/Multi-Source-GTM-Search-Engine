@@ -165,8 +165,8 @@ The **Multi-Source GTM Research Engine** is architected as a modular, agent-insp
      - > devops job site:company.com
     > **Step 2**: All queries run in parallel across:
 	 - > NewsAPI, LinkedIn, CSE, Web Scraping
-	> **Step 3**: Evidence scored, weak results flagged
-	> **Step 4**: Weak evidence → Refined queries → Retry
+	> **Step 3**: Evidence scored, weak results flagged<br>
+	> **Step 4**: Weak evidence → Refined queries → Retry<br>
 	> **Step 5**: Findings synthesized via LLM (JSON output)
 
 <br>
@@ -417,6 +417,7 @@ Once the server is up, open your browser and go to:
 http://127.0.0.1:8000/docs
 ```
 You’ll see the interactive Swagger UI to test all endpoints.
+<br>
 <br>
 
 ### **7. Run a Sample Research Query**
