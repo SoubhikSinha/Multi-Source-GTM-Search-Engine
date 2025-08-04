@@ -376,7 +376,34 @@ Each endpoint is powered by intelligent agent flows:
 <br>
 
 ## Setup and Running Locally
-<!-- Local install, env vars, run commands -->
+### **1. Clone the Repository**
+Clone the repository to your local machine:
+```bash
+git clone https://github.com/SoubhikSinha/Multi-Source-GTM-Search-Engine.git
+```
+<br>
+
+### **2. Create a Virtual Environment**
+Navigate to the root directory and create a Conda virtual environment using Python 3.10:
+```bash
+conda create --prefix ./venv python=3.10 -y
+```
+<br>
+
+### **3. Activate the Environment**
+Activate the virtual environment:
+```bash
+conda activate venv/
+```
+<br>
+
+### **4. Install Project Dependencies**
+Install all the necessary libraries listed in requirements.txt:
+```bash
+pip install -r requirements.txt
+```
+<br>
+
 
 ## Limitations and Future Work
 <!-- Caveats, known issues, and planned improvements -->
