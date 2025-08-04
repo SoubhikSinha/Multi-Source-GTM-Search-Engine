@@ -176,7 +176,57 @@ This architecture enables fast, adaptive, and scalable GTM research—ideal for 
 <br>
 
 ## Agent Design (Orchestration)
-<!-- Dive into agent‐level design and orchestration -->
+The system leverages an **agentic architecture** inspired by Anthropic’s “Effective Agents” framework to orchestrate complex research tasks. Instead of relying on monolithic logic, we structure the workflow into **modular AI agents**, each with a narrow, specialized responsibility. These agents collaborate through feedback loops, retries, and strategic delegation — enabling **dynamic, intelligent, and high-coverage research** across companies and data sources.
+
+ - ### **Core Agent Roles**
+	 | Agent Name                   | Purpose                                                                                                                                       | Key Tools / Logic                                 |
+	|------------------------------|-----------------------------------------------------------------------------------------------------------------------------------------------|---------------------------------------------------|
+	| **QueryStrategyAgent**       | Breaks down the user’s research goal into 8–12 diverse, high-signal search queries across sources like LinkedIn, job boards, blogs, and news. | `OpenAI GPT-4o`<br>`Prompt Templates`             |
+	| **ExecutionAgent**           | Executes queries across multiple domains and sources in parallel, applying retry logic and honoring concurrency limits.                       | `Async I/O`<br>`Semaphores`<br>`Circuit Breakers` |
+	| **EvaluatorAgent**           | Reviews raw search results, scoring confidence and detecting gaps in coverage (e.g., missing signals, weak evidence).                         | `Evidence Count`<br>`Scoring Logic`               |
+	| **RefinerAgent**             | For low-confidence companies, generates targeted follow-up queries using weak-signal feedback to improve depth and precision.                  | `LLM Feedback Loop`<br>`Query Expansion`          |
+	| **SynthesisAgent**           | Aggregates and deduplicates evidence across all sources, then generates a concise synthesis aligned with the research goal.                    | `GPT-4 LLM Summarization`                         |
+	| **ReQueryAgent** *(Optional)* | Triggers a second search wave if critical signals are missing or confidence remains low after retries.                                        | `Query Budget`<br>`Loop Guard`                    |
+
+<br>
+
+ - ### **Agent Collaboration Workflow**
+	 - **QueryStrategyAgent**
+	   - Transforms the user goal into 8–12 cross-channel queries  
+	   - Ensures diversity across sources (e.g., blogs, PR, LinkedIn, docs)
+	- **ExecutionAgent**
+	   - Executes all queries in parallel across company domains using async semaphores  
+	   - Sources include NewsAPI, company website scraping, LinkedIn, and Google Custom Search
+    - **EvaluatorAgent**
+	   - Analyzes results per company  
+	   - Flags domains with:  
+		   - Low confidence score (e.g., < 0.7)  
+		   - Sparse evidence (e.g., only 1 source)
+    - **RefinerAgent**
+	   - For flagged companies, generates follow-up queries using weak-signal cues (e.g., blog post titles, job listings)  
+	   - Focuses explicitly on the domain with refined `site:`-style search prompts
+	- **ExecutionAgent (Retry)**
+	   - Re-executes the refined queries for flagged companies  
+	   - Merges improved results with original evidence
+	- **SynthesisAgent**
+	   - Deduplicates and synthesizes multi-source evidence  
+	   - Returns structured insights (`summary`, `signals_found`, `evidence_count`)
+ 
+ - ### **Design Principles**
+	 -   **Agent Modularity**: Each agent is logically decoupled and independently testable. Components can be swapped or extended without breaking the pipeline.
+	-   **Feedback Loops**: Evaluator → Refiner → Execution forms a resilient loop for handling weak or incomplete data.
+	-   **Asynchronous Parallelism**: High-throughput querying enabled via asyncio semaphores and streaming support (SSE).
+	-   **Confidence-Driven Decision Making**: Agents make choices (e.g., whether to retry, refine) based on dynamic scoring thresholds.
+	-   **LLM as Reasoning Core**: GPT-4 powers both initial strategy generation and final synthesis, using tailored prompts per agent.
+	-   **Capped Iteration**: Each domain is bounded by a configurable query budget to prevent runaway retries or infinite loops.
+
+- ### **Inspired by Anthropic’s Engineering Patterns**
+	This design follows best practices outlined in Anthropic’s “Building Effective Agents” including:
+	-   **Evaluator-Optimizer Loop**: Confidence-driven refinement cycles
+	-   **Orchestrator-Workers**: Strategy → Execution → Evaluation → Retry → Synthesis
+	-   **Augmented LLM**: Each LLM call is enriched with tools (news, web, LinkedIn) and memory (via caching)
+
+<br>
 
 ## How it Works
 <!-- Explain the workflow step by step -->
