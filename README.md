@@ -229,7 +229,81 @@ The system leverages an **agentic architecture** inspired by Anthropic’s “Ef
 <br>
 
 ## How it Works
-<!-- Explain the workflow step by step -->
+This system transforms a high-level research goal into structured, evidence-backed insights by orchestrating a pipeline of intelligent agents and async operations across multiple data sources.
+
+- ### **🧾 User Input**
+	A user provides:
+	-   **Research Goal** — Natural language intent (e.g., _“Find companies using Kubernetes with recent security incidents”_)
+	-   **Company Domains** — A list of domains (e.g., stripe.com, datadog.com)
+	-   **Search Depth** — Controls query volume *(quick, standard, comprehensive)*
+	-   **Confidence Threshold** — Minimum acceptable evidence confidence
+	-   **Max Parallelism** — Concurrency budget for async processing
+
+- ### **🧠 Query Generation**
+	The QueryStrategyAgent converts the research goal into **8–12 high-signal search queries** using OpenAI. Queries target various information channels:
+	-   🔍 Company blogs
+	-   📰 News articles
+	-   👥 LinkedIn posts
+
+	Each query is scored for **expected relevance**, ensuring diverse and targeted coverage.
+
+- ### **🔄 Parallel Execution**
+	The ExecutionAgent performs **parallelized searches** using asyncio semaphores. Each query runs across all domains with rate-limited, source-specific integrations:
+		
+	| Source       | Method                                        |
+	|--------------|-----------------------------------------------|
+	| News API     | NewsAPI search (sorted by relevance)          |
+	| Company Site | BeautifulSoup scraping (`/`, `/blog`, `/about`) |
+	| LinkedIn     | Simulated API call (mock or real)             |
+	| Web Snippets | Google Custom Search API                      |
+
+Search results are collected as **structured evidence objects**.
+
+- ### **✅ Evaluation & Gaps**
+	The EvaluatorAgent computes:
+	-   **Confidence Score** — Averaged across all evidence sources per company
+	-   **Evidence Sources** — Total distinct hits (minimizing source redundancy)
+	
+	Companies with **insufficient confidence** or **weak evidence** are flagged for further investigation.
+
+- ### **🔁 Query Refinement (if needed)**
+	The RefinerAgent uses **weak signals** (e.g., blog snippet, job description fragments) to craft **targeted follow-up queries**, like:
+	> “site:stripe.com/careers kubernetes security engineer”
+
+	These refined queries are re-executed and merged into the original evidence set.
+
+- ### **🧾 Synthesis**
+	The SynthesisAgent aggregates all collected evidence for a domain and produces:
+	```bash
+		{
+			"summary": "Stripe appears to use Kubernetes in production...",
+			"signals_found": ["job posting for k8s", "blog on container orchestration"],
+			"evidence_count": 5
+		}
+	```
+
+	This synthesis is powered by a **structured LLM prompt** tuned for concise, factual extraction.
+
+- ### **📦 Final Output**
+	The response includes:
+	-   research_id: UUID trace
+	-   total_companies: Domains processed
+	-   search_strategies_generated: Query count
+	-   total_searches_executed: Domain × Query total
+	-   processing_time_ms: Wall time
+	-   results: List of structured findings per company
+
+- ### **🧵 Optional: Real-Time Streaming**
+	Via the /research/stream endpoint, results are streamed using **Server-Sent Events (SSE)**. Each company’s insight is pushed as soon as it’s ready — ideal for dashboards or long-running investigations.
+
+- ### **Under the Hood**
+	-   **Concurrency:** Controlled using asyncio.Semaphore
+	-   **Retries & Timeout Handling:** Built-in for flaky APIs
+	-   **Caching:** In-memory SimpleCache with hash-based deduplication
+	-   **Resilience:** Supports query re-planning and fallback logic
+	-   **Observability:** Logs start/end times, error traces, cache hits, and agent decisions
+
+<br>
 
 ## Tech Stack
 <!-- Specify languages, frameworks, libraries, etc. -->
