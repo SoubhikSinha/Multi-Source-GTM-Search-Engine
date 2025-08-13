@@ -165,8 +165,8 @@ The **Multi-Source GTM Research Engine** is architected as a modular, agent-insp
      - > devops job site:company.com
     > **Step 2**: All queries run in parallel across:
 	 - > NewsAPI, LinkedIn, CSE, Web Scraping
-	> **Step 3**: Evidence scored, weak results flagged
-	> **Step 4**: Weak evidence → Refined queries → Retry
+	> **Step 3**: Evidence scored, weak results flagged<br>
+	> **Step 4**: Weak evidence → Refined queries → Retry<br>
 	> **Step 5**: Findings synthesized via LLM (JSON output)
 
 <br>
@@ -404,22 +404,61 @@ pip install -r requirements.txt
 ```
 <br>
 
-### **5. Run the FastAPI Application**
+### **5. Set Up API Keys**
+Create and paste your API keys inside  `.env`  file (if not created, create one).<br>
+Example  `.env`  file content :
+```bash
+OPENAI_API_KEY="<YOUR_OPENAI_API_KEY>"
+NEWS_API_KEY="<YOUR_NEWS_API_KEY>"
+GOOGLE_API_KEY="<YOUR_GOOGLE_API_KEY>"
+GOOGLE_CX="<YOUR_GOOGLE_CX_KEY"
+```
+**Where to get your keys:**
+
+-   **OPENAI_API_KEY**  
+    Obtain from the OpenAI dashboard:  
+    [https://platform.openai.com/account/api-keys](https://platform.openai.com/account/api-keys)
+    
+-   **NEWS_API_KEY**  
+    Sign up (free tier available) and retrieve your key at NewsAPI.org:  
+    https://newsapi.org/register
+    
+-   **GOOGLE_API_KEY**
+    
+    1.  Go to the Google Cloud Console → **APIs & Services** → **Credentials**  
+        https://console.cloud.google.com/apis/credentials
+        
+    2.  Click **Create credentials** → **API key**, then copy the generated key.
+        
+-   **GOOGLE_CX** (Custom Search Engine ID)
+    
+    1.  Visit Google’s Programmable Search Engine control panel:  
+        https://programmablesearchengine.google.com/
+        
+    2.  Create a new search engine (or select an existing one) and copy the **Search engine ID** (labeled “cx”).
+        
+
+	> **Tip:** Add `.env` to your `.gitignore` so you don’t accidentally commit your secrets!
+
+<br>
+
+### **6. Run the FastAPI Application**
 Launch the server using Uvicorn:
 ```bash
 uvicorn main:app --reload
 ```
 <br>
 
-### **6. Access the API Interface**
+### **7. Access the API Interface**
 Once the server is up, open your browser and go to:
 ```bash
 http://127.0.0.1:8000/docs
 ```
 You’ll see the interactive Swagger UI to test all endpoints.
 <br>
+<br>
 
-### **7. Run a Sample Research Query**
+### **8. Run a Sample Research Query**
 In the POST /research/batch endpoint, paste the following JSON to test:
 ```bash
 {
@@ -446,7 +485,7 @@ curl -X 'POST' \
   ```
   <br>
 
-### **8. Shut Down the Server**
+### **9. Shut Down the Server**
 To stop the FastAPI server, simply use:
 ```bash
 CTRL + C
