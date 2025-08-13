@@ -12,7 +12,7 @@ GOOGLE_CX = os.getenv("GOOGLE_CX")            # Google Custom Search Engine ID (
 
 # Define an async function to search for LinkedIn company page content using Google Custom Search
 async def search_linkedin(domain: str, query: str) -> dict:
-    # Google Custom Search endpoint
+    # Google Custom Search endpoint (Root URL)
     api_url = "https://www.googleapis.com/customsearch/v1"
 
     # Extract a simplified version of the domain to form the LinkedIn company slug
@@ -29,7 +29,7 @@ async def search_linkedin(domain: str, query: str) -> dict:
     try:
         # Create an aiohttp client session for async HTTP requests
         async with aiohttp.ClientSession() as session:
-            # Send GET request to Google CSE API with a timeout of 8 seconds
+            # Send GET request to Google CSE (Custom Search Engine) API with a timeout of 8 seconds
             async with session.get(api_url, params=params, timeout=8) as resp:
                 # If response status is not 200 (OK), raise exception
                 if resp.status != 200:

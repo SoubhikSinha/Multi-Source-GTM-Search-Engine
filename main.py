@@ -1,6 +1,5 @@
 import logging                                # For logging events and errors
 from aiohttp import ClientSession             # Async HTTP client for making external requests
-from dataclasses import asdict, is_dataclass  # Helpers for converting dataclasses (unused here)
 from fastapi import FastAPI, HTTPException    # FastAPI classes for API and error responses
 from models import ResearchRequest            # Input schema for the API
 from query_generator import QueryGenerator    # Module to generate intelligent search queries
@@ -9,7 +8,6 @@ from fastapi.responses import StreamingResponse  # Used for Server-Sent Events (
 import json                                   # For JSON serialization
 import uuid                                   # To generate unique research IDs
 import time                                   # To measure execution time
-import asyncio                                # To manage async concurrency
 
 # Set up basic logging level
 logging.basicConfig(level=logging.INFO)
