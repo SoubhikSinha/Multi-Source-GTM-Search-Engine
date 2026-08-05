@@ -1,7 +1,7 @@
 # Multi-Source GTM (Go-To-Market) Search Engine
 
 ## Acknowledgements
-This project was built as part of a technical challenge from **[OpenFunnel](https://www.ycombinator.com/companies/openfunnel)**, simulating a high-stakes engineering scenario. It draws deep inspiration from Anthropic’s [_Building Effective Agents_](https://www.anthropic.com/engineering/building-effective-agents), leveraging modular AI patterns like **Evaluator, Refiner**, and **Synthesizer agents.** Core tools such as **OpenAI APIs, NewsAPI**, and **FastAPI (with async orchestration, caching, and streaming)** powered the system’s intelligence and scalability. Sincere thanks to the challenge creators for a spec that encouraged real-world design thinking and thoughtful system architecture.
+This project was built as part of simulating a high-stakes engineering scenario. It draws deep inspiration from Anthropic’s [_Building Effective Agents_](https://www.anthropic.com/engineering/building-effective-agents), leveraging modular AI patterns like **Evaluator, Refiner**, and **Synthesizer agents.** Core tools such as **OpenAI APIs, NewsAPI**, and **FastAPI (with async orchestration, caching, and streaming)** powered the system’s intelligence and scalability. Sincere thanks to the challenge creators for a spec that encouraged real-world design thinking and thoughtful system architecture.
 
 <br>
 
