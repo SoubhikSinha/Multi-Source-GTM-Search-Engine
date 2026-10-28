@@ -146,7 +146,7 @@ The **Multi-Source GTM Research Engine** is architected as a modular, agent-insp
  
  - ### **Core Architectural Features**
 	 -   **Async First** : Built entirely on Python’s asyncio + aiohttp, with streaming support, timeouts, and semaphores for controlled parallelism.
-	-   **LLM-Driven Strategy** : GPT-4o (mini)o (mini) generates queries, expands them intelligently, and synthesizes final summaries—mimicking a human research analyst.
+	-   **LLM-Driven Strategy** : GPT-4o (mini) generates queries, expands them intelligently, and synthesizes final summaries—mimicking a human research analyst.
 	-   **Tool-Agnostic Search Modules** : Each data source (News, LinkedIn, Website, Web Search) is encapsulated as a plug-and-play async module—easy to extend or replace.
 	-   **Smart Retry and Backoff** : Implements retry logic, confidence-based re-query, and exception-aware fault tolerance at every stage.
 	-   **In-Memory Caching** : Lightweight SimpleCache system prevents duplicate API calls, supports quick prototyping, and logs hit-rates.
@@ -159,7 +159,7 @@ The **Multi-Source GTM Research Engine** is architected as a modular, agent-insp
 	 -   **Scalability First**: Supports dozens of domains and 80+ searches in parallel with dynamic throttling.
  
  - ### **Example Flow (for: “Find companies using Kubernetes in production with recent security incidents”)**
-	> **Step 1**: GPT-4o (mini)o (mini) generates queries like:
+	> **Step 1**: GPT-4o (mini) generates queries like:
 	 - > site:linkedin.com kubernetes security engineer
 	 - > site:company.com/blog kubernetes deployment
      - > devops job site:company.com
