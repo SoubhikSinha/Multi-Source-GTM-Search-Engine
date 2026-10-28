@@ -146,7 +146,7 @@ The **Multi-Source GTM Research Engine** is architected as a modular, agent-insp
  
  - ### **Core Architectural Features**
 	 -   **Async First** : Built entirely on Python’s asyncio + aiohttp, with streaming support, timeouts, and semaphores for controlled parallelism.
-	-   **LLM-Driven Strategy** : GPT-4o generates queries, expands them intelligently, and synthesizes final summaries—mimicking a human research analyst.
+	-   **LLM-Driven Strategy** : GPT-4o (mini)o (mini) generates queries, expands them intelligently, and synthesizes final summaries—mimicking a human research analyst.
 	-   **Tool-Agnostic Search Modules** : Each data source (News, LinkedIn, Website, Web Search) is encapsulated as a plug-and-play async module—easy to extend or replace.
 	-   **Smart Retry and Backoff** : Implements retry logic, confidence-based re-query, and exception-aware fault tolerance at every stage.
 	-   **In-Memory Caching** : Lightweight SimpleCache system prevents duplicate API calls, supports quick prototyping, and logs hit-rates.
@@ -159,7 +159,7 @@ The **Multi-Source GTM Research Engine** is architected as a modular, agent-insp
 	 -   **Scalability First**: Supports dozens of domains and 80+ searches in parallel with dynamic throttling.
  
  - ### **Example Flow (for: “Find companies using Kubernetes in production with recent security incidents”)**
-	> **Step 1**: GPT-4o generates queries like:
+	> **Step 1**: GPT-4o (mini)o (mini) generates queries like:
 	 - > site:linkedin.com kubernetes security engineer
 	 - > site:company.com/blog kubernetes deployment
      - > devops job site:company.com
@@ -181,11 +181,11 @@ The system leverages an **agentic architecture** inspired by Anthropic’s “Ef
  - ### **Core Agent Roles**
 	 | Agent Name                   | Purpose                                                                                                                                       | Key Tools / Logic                                 |
 	|------------------------------|-----------------------------------------------------------------------------------------------------------------------------------------------|---------------------------------------------------|
-	| **QueryStrategyAgent**       | Breaks down the user’s research goal into 8–12 diverse, high-signal search queries across sources like LinkedIn, job boards, blogs, and news. | `OpenAI GPT-4o`<br>`Prompt Templates`             |
+	| **QueryStrategyAgent**       | Breaks down the user’s research goal into 8–12 diverse, high-signal search queries across sources like LinkedIn, job boards, blogs, and news. | `OpenAI GPT-4o (mini)(mini)`<br>`Prompt Templates`             |
 	| **ExecutionAgent**           | Executes queries across multiple domains and sources in parallel, applying retry logic and honoring concurrency limits.                       | `Async I/O`<br>`Semaphores`<br>`Circuit Breakers` |
 	| **EvaluatorAgent**           | Reviews raw search results, scoring confidence and detecting gaps in coverage (e.g., missing signals, weak evidence).                         | `Evidence Count`<br>`Scoring Logic`               |
 	| **RefinerAgent**             | For low-confidence companies, generates targeted follow-up queries using weak-signal feedback to improve depth and precision.                  | `LLM Feedback Loop`<br>`Query Expansion`          |
-	| **SynthesisAgent**           | Aggregates and deduplicates evidence across all sources, then generates a concise synthesis aligned with the research goal.                    | `GPT-4 LLM Summarization`                         |
+	| **SynthesisAgent**           | Aggregates and deduplicates evidence across all sources, then generates a concise synthesis aligned with the research goal.                    | `GPT-4o (mini) LLM Summarization`                         |
 	| **ReQueryAgent** *(Optional)* | Triggers a second search wave if critical signals are missing or confidence remains low after retries.                                        | `Query Budget`<br>`Loop Guard`                    |
 
 <br>
@@ -217,7 +217,7 @@ The system leverages an **agentic architecture** inspired by Anthropic’s “Ef
 	-   **Feedback Loops**: Evaluator → Refiner → Execution forms a resilient loop for handling weak or incomplete data.
 	-   **Asynchronous Parallelism**: High-throughput querying enabled via asyncio semaphores and streaming support (SSE).
 	-   **Confidence-Driven Decision Making**: Agents make choices (e.g., whether to retry, refine) based on dynamic scoring thresholds.
-	-   **LLM as Reasoning Core**: GPT-4 powers both initial strategy generation and final synthesis, using tailored prompts per agent.
+	-   **LLM as Reasoning Core**: GPT-4o (mini) powers both initial strategy generation and final synthesis, using tailored prompts per agent.
 	-   **Capped Iteration**: Each domain is bounded by a configurable query budget to prevent runaway retries or infinite loops.
 
 - ### **Inspired by Anthropic’s Engineering Patterns**
@@ -320,7 +320,7 @@ A lean, modular tech stack optimized for async research, LLM integration, and ra
 	| Component                     | Tool               | Notes                                                             |
 	|-------------------------------|--------------------|-------------------------------------------------------------------|
 	| Query Generation & Expansion  | OpenAI GPT-4o (mini) | Generates diverse, context-aware search strategies                |
-	| Evidence Synthesis            | OpenAI GPT-4       | Summarizes and scores findings across domains                     |
+	| Evidence Synthesis            | OpenAI GPT-4o (mini)       | Summarizes and scores findings across domains                     |
 	| Agent-Like Orchestration      | Internal logic     | Patterned after Anthropic’s “Effective Agents” principles         |
 
 - ### **🌐 External Integrations**
