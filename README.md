@@ -181,7 +181,7 @@ The system leverages an **agentic architecture** inspired by Anthropic’s “Ef
  - ### **Core Agent Roles**
 	 | Agent Name                   | Purpose                                                                                                                                       | Key Tools / Logic                                 |
 	|------------------------------|-----------------------------------------------------------------------------------------------------------------------------------------------|---------------------------------------------------|
-	| **QueryStrategyAgent**       | Breaks down the user’s research goal into 8–12 diverse, high-signal search queries across sources like LinkedIn, job boards, blogs, and news. | `OpenAI GPT-4o (mini)(mini)`<br>`Prompt Templates`             |
+	| **QueryStrategyAgent**       | Breaks down the user’s research goal into 8–12 diverse, high-signal search queries across sources like LinkedIn, job boards, blogs, and news. | `OpenAI GPT-4o (mini)`<br>`Prompt Templates`             |
 	| **ExecutionAgent**           | Executes queries across multiple domains and sources in parallel, applying retry logic and honoring concurrency limits.                       | `Async I/O`<br>`Semaphores`<br>`Circuit Breakers` |
 	| **EvaluatorAgent**           | Reviews raw search results, scoring confidence and detecting gaps in coverage (e.g., missing signals, weak evidence).                         | `Evidence Count`<br>`Scoring Logic`               |
 	| **RefinerAgent**             | For low-confidence companies, generates targeted follow-up queries using weak-signal feedback to improve depth and precision.                  | `LLM Feedback Loop`<br>`Query Expansion`          |
